@@ -8,6 +8,31 @@ import { PushNotificationClient } from './pushNotifications';
 import { configuration } from '@/configuration';
 import chalk from 'chalk';
 import { Credentials } from '@/persistence';
+import * as tunnel from 'tunnel';
+import type { AxiosRequestConfig } from 'axios';
+
+// Create proxy agent if HTTP proxy is configured
+function getProxyConfig(): Pick<AxiosRequestConfig, 'httpsAgent' | 'httpAgent' | 'proxy'> | {} {
+  const proxyUrl = process.env.http_proxy || process.env.HTTP_PROXY || '';
+  const proxyMatch = proxyUrl.match(/https?:\/\/([^:]+):(\d+)/);
+
+  if (proxyMatch) {
+    const [, host, port] = proxyMatch;
+    return {
+      httpsAgent: tunnel.httpsOverHttp({
+        proxy: { host, port: parseInt(port, 10) }
+      }),
+      httpAgent: tunnel.httpOverHttp({
+        proxy: { host, port: parseInt(port, 10) }
+      }),
+      proxy: false  // Disable axios automatic proxy detection
+    };
+  }
+
+  return {};
+}
+
+const proxyConfig = getProxyConfig();
 
 export class ApiClient {
 
@@ -69,7 +94,8 @@ export class ApiClient {
             'Authorization': `Bearer ${this.credential.token}`,
             'Content-Type': 'application/json'
           },
-          timeout: 60000 // 1 minute timeout for very bad network connections
+          timeout: 60000, // 1 minute timeout for very bad network connections
+          ...proxyConfig
         }
       )
 
@@ -134,7 +160,8 @@ export class ApiClient {
           'Authorization': `Bearer ${this.credential.token}`,
           'Content-Type': 'application/json'
         },
-        timeout: 60000 // 1 minute timeout for very bad network connections
+        timeout: 60000, // 1 minute timeout for very bad network connections
+        ...proxyConfig
       }
     );
 
@@ -188,7 +215,8 @@ export class ApiClient {
             'Authorization': `Bearer ${this.credential.token}`,
             'Content-Type': 'application/json'
           },
-          timeout: 5000
+          timeout: 5000,
+          ...proxyConfig
         }
       );
 

@@ -1,6 +1,31 @@
 import axios from 'axios'
 import { logger } from '@/ui/logger'
 import { Expo, ExpoPushMessage } from 'expo-server-sdk'
+import * as tunnel from 'tunnel'
+import type { AxiosRequestConfig } from 'axios'
+
+// Create proxy agent if HTTP proxy is configured
+function getProxyConfig(): Pick<AxiosRequestConfig, 'httpsAgent' | 'httpAgent' | 'proxy'> | {} {
+  const proxyUrl = process.env.http_proxy || process.env.HTTP_PROXY || '';
+  const proxyMatch = proxyUrl.match(/https?:\/\/([^:]+):(\d+)/);
+
+  if (proxyMatch) {
+    const [, host, port] = proxyMatch;
+    return {
+      httpsAgent: tunnel.httpsOverHttp({
+        proxy: { host, port: parseInt(port, 10) }
+      }),
+      httpAgent: tunnel.httpOverHttp({
+        proxy: { host, port: parseInt(port, 10) }
+      }),
+      proxy: false
+    };
+  }
+
+  return {};
+}
+
+const proxyConfig = getProxyConfig();
 
 export interface PushToken {
     id: string
@@ -32,7 +57,8 @@ export class PushNotificationClient {
                     headers: {
                         'Authorization': `Bearer ${this.token}`,
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    ...proxyConfig
                 }
             )
 

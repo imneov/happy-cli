@@ -1,6 +1,31 @@
 import axios from 'axios';
 import { encodeBase64, encodeBase64Url, authChallenge } from './encryption';
 import { configuration } from '@/configuration';
+import * as tunnel from 'tunnel';
+import type { AxiosRequestConfig } from 'axios';
+
+// Create proxy agent if HTTP proxy is configured
+function getProxyConfig(): Pick<AxiosRequestConfig, 'httpsAgent' | 'httpAgent' | 'proxy'> | {} {
+  const proxyUrl = process.env.http_proxy || process.env.HTTP_PROXY || '';
+  const proxyMatch = proxyUrl.match(/https?:\/\/([^:]+):(\d+)/);
+
+  if (proxyMatch) {
+    const [, host, port] = proxyMatch;
+    return {
+      httpsAgent: tunnel.httpsOverHttp({
+        proxy: { host, port: parseInt(port, 10) }
+      }),
+      httpAgent: tunnel.httpOverHttp({
+        proxy: { host, port: parseInt(port, 10) }
+      }),
+      proxy: false
+    };
+  }
+
+  return {};
+}
+
+const proxyConfig = getProxyConfig();
 
 /**
  * Note: This function is deprecated. Use readPrivateKey/writePrivateKey from persistence module instead.
@@ -23,6 +48,8 @@ export async function authGetToken(secret: Uint8Array): Promise<string> {
     challenge: encodeBase64(challenge),
     publicKey: encodeBase64(publicKey),
     signature: encodeBase64(signature)
+  }, {
+    ...proxyConfig
   });
 
   if (!response.data.success || !response.data.token) {
